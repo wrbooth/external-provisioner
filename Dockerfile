@@ -2,5 +2,7 @@ FROM gcr.io/distroless/static:latest
 LABEL maintainers="Kubernetes Authors"
 LABEL description="CSI External Provisioner"
 
-COPY ./bin/csi-provisioner csi-provisioner
+ARG ARCH
+
+COPY ./bin/csi-provisioner-${ARCH} csi-provisioner
 ENTRYPOINT ["/csi-provisioner"]

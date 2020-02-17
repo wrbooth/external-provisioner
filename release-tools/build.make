@@ -31,6 +31,8 @@ REGISTRY_NAME=quay.io/k8scsi
 # some CI systems (like TravisCI, which pulls only 50 commits).
 REV=$(shell git describe --long --tags --match='v*' --dirty 2>/dev/null || git rev-list -n1 HEAD)
 
+ARCHS=amd64 arm arm64
+
 # A space-separated list of image tags under which the current build is to be pushed.
 # Determined dynamically.
 IMAGE_TAGS=
@@ -62,11 +64,19 @@ endif
 
 build-%:
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-X main.version=$(REV) -extldflags "-static"' -o ./bin/$* ./cmd/$*
+	GOARM=
+	for arch in $(ARCHS); do \
+		if [ "$$arch" = "arm" ] ; then \
+			GOARM="GOARM=7"; \
+		fi; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch $(GOARM) go build -a -ldflags '-X main.version=$(REV) -extldflags "-static"' -o ./bin/$*-$$arch ./cmd/$*; \
+	done
 	CGO_ENABLED=0 GOOS=windows go build -a -ldflags '-X main.version=$(REV) -extldflags "-static"' -o ./bin/$*.exe ./cmd/$*
 
 container-%: build-%
-	docker build -t $*:latest -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
+	for arch in $(ARCHS); do \
+		docker build -t $*-$$arch:latest --build-arg ARCH=$$arch -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) . ; \
+	done
 
 push-%: container-%
 	set -ex; \
